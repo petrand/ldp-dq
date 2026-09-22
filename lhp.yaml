@@ -1,0 +1,100 @@
+# LakehousePlumber Project Configuration
+name: ldp-dq
+version: "1.0"
+description: "Generated DLT pipeline project"
+author: ""
+created_date: "2026-09-21T09:52:26.203068"
+
+# Optional: Enforce LakehousePlumber version requirements
+# Ensures consistent code generation across development and CI environments
+# required_lhp_version: ">=0.4.1,<0.5.0"  # Allow patch updates within 0.4.x
+# required_lhp_version: "~=0.4.1"          # Equivalent to >=0.4.1,<0.5.0
+# required_lhp_version: "==0.4.1"          # Exact version pin
+
+# Optional: Include patterns to filter which YAML files to process
+# By default, all YAML files in the pipelines directory are processed
+# Uncomment and customize the patterns below to filter files
+# include:
+#   - "*.yaml"                    # All YAML files
+#   - "bronze_*.yaml"             # Files starting with "bronze_"
+#   - "silver/**/*.yaml"          # All YAML files in silver subdirectories
+#   - "gold/dimension_*.yaml"     # Dimension files in gold directory
+#   - "!**/temp_*.yaml"           # Exclude temporary files (prefix with !) 
+
+
+## Optional: Add operational metadata columns to the generated pipelines
+## These can be used to track the source of the data and the processing of the data
+operational_metadata:
+  columns:
+  
+    _source_file_path:
+      expression: "F.col('_metadata.file_path')"
+      description: "File paths"
+      applies_to: ["view"]
+    
+    _processing_timestamp:
+      expression: "F.current_timestamp()"
+      description: "When the record was processed by the pipeline"
+      applies_to: ["streaming_table", "materialized_view", "view"]
+
+    _source_file_name:
+      expression: "F.col('_metadata.file_name')"
+      description: "Name of the input file along with its extension"
+      applies_to: ["view"]
+
+    _source_file_size:
+      expression: "F.col('_metadata.file_size')"
+      description: "Length of the input file, in bytes"
+      applies_to: ["view"]
+
+    _source_file_modification_time:
+      expression: "F.col('_metadata.file_modification_time')"
+      description: "Last modification time of the input file"
+      applies_to: ["view"]
+
+
+    _record_hash:
+      expression: "F.xxhash64(*[F.col(c) for c in df.columns])"
+      description: "Hash of all record fields for change detection"
+      applies_to: ["streaming_table", "materialized_view", "view"]
+      additional_imports:
+        - "from pyspark.sql.functions import hash"
+
+## Optional: Declarative event logging for all pipelines
+## Automatically generates event_log blocks in pipeline resource files
+## without requiring -pc flag or pipeline_config.yaml
+# event_log:
+#   enabled: true
+#   catalog: "${event_log_catalog}"
+#   schema: _meta
+#   name_prefix: ""
+#   name_suffix: "_event_log"
+
+## Optional: Centralized event log monitoring
+## Generates a streaming notebook (monitoring/{env}/union_event_logs.py) that
+## writes all pipeline event logs into a single Delta table, an MVs-only
+## Lakeflow Declarative Pipeline with analytical materialized views, and a
+## Databricks Workflow job that chains the two.
+## Requires event_log to be enabled above.
+## See docs/monitoring.rst for full configuration reference.
+##
+## Minimal setup (uses sensible defaults — checkpoint_path AND
+## job_config_path are required when monitoring is enabled):
+# monitoring:
+#   checkpoint_path: "/Volumes/${catalog}/_meta/checkpoints/event_logs"
+#   job_config_path: "config/monitoring_job_config.yaml"
+##
+## Custom configuration example:
+# monitoring:
+#   pipeline_name: "my_custom_monitor"     # Default: ${project_name}_event_log_monitoring
+#   catalog: "analytics_catalog"           # Default: inherits from event_log.catalog
+#   schema: "_monitoring"                  # Default: inherits from event_log.schema
+#   streaming_table: "unified_event_log"   # Default: all_pipelines_event_log
+#   checkpoint_path: "/Volumes/${catalog}/_meta/checkpoints/event_logs"  # required
+#   job_config_path: "config/monitoring_job_config.yaml"                 # required
+#   max_concurrent_streams: 10             # Default: 10 (ThreadPoolExecutor size)
+#   materialized_views:                    # Default: one events_summary MV
+#     - name: "error_events"
+#       sql: "SELECT * FROM unified_event_log WHERE event_type = 'error'"
+#     - name: "daily_analysis"
+#       sql_path: "sql/monitoring_custom_analysis.sql"

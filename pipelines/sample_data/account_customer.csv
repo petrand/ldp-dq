@@ -1,0 +1,6 @@
+account,customer,operation,sequence_num
+ACC-100,Acme Corp,INSERT,1
+ACC-200,Globex Ltd,INSERT,1
+ACC-300,Initech,INSERT,1
+ACC-400,,INSERT,1
+" ",Orphan Co,INSERT,1

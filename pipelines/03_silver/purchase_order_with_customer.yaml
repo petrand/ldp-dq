@@ -1,0 +1,74 @@
+# Bronze purchase_order LEFT JOIN bronze account_customer (manual map).
+# Same shared DLQ as invoice: source_table tags rows so recycle is per flowgroup.
+pipeline: silver_purchase_order
+flowgroup: purchase_order_with_customer
+
+actions:
+  - name: load_purchase_order_bronze
+    type: load
+    readMode: stream
+    source:
+      type: delta
+      catalog: "${catalog}"
+      schema: "${bronze_schema}"
+      table: purchase_order
+      options:
+        readChangeFeed: "true"
+      where_clause:
+        - "_change_type IN ('insert', 'update_postimage')"
+        - "__END_AT IS NULL"
+    target: v_purchase_order
+    description: "Stream new current SCD2 purchase-order versions"
+    # Demo rows: pipelines/sample_data/purchase_order.csv
+
+  - name: load_account_customer_bronze
+    type: load
+    readMode: batch
+    source:
+      type: delta
+      catalog: "${catalog}"
+      schema: "${bronze_schema}"
+      table: account_customer
+      where_clause:
+        - "__END_AT IS NULL"
+    target: v_account_customer
+    description: "Batch lookup of current account-customer versions"
+
+  - name: join_po_account_customer
+    type: transform
+    transform_type: sql
+    source:
+      - v_purchase_order
+      - v_account_customer
+    target: v_po_joined
+    description: "Left join purchase orders to account_customer on account"
+    sql: |
+      SELECT
+        po.po_id,
+        po.account,
+        ac.customer
+      FROM stream(v_purchase_order) po
+      LEFT JOIN v_account_customer ac
+        ON po.account = ac.account
+
+  - name: quarantine_failed_joins
+    type: transform
+    transform_type: data_quality
+    source: v_po_joined
+    target: v_po_validated
+    readMode: stream
+    mode: quarantine
+    expectations_file: expectations/purchase_order_join_quality.yaml
+    quarantine:
+      dlq_table: "${catalog}.${dq_schema}.invoice_join_dlq"
+      source_table: "${catalog}.${silver_schema}.purchase_order_with_customer"
+    description: "Quarantine failed PO-customer joins into the shared DLQ"
+
+  - name: write_purchase_order_with_customer
+    type: write
+    source: v_po_validated
+    write_target:
+      type: streaming_table
+      catalog: "${catalog}"
+      schema: "${silver_schema}"
+      table: purchase_order_with_customer

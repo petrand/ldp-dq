@@ -1,0 +1,17 @@
+# LHP data_quality expectations on v_po_joined.
+# Failures MERGE into the shared DLQ (same table as invoice).
+po_id IS NOT NULL AND LENGTH(TRIM(po_id)) > 0:
+  action: drop
+  name: po_id_present
+
+account IS NOT NULL AND LENGTH(TRIM(account)) > 0:
+  action: drop
+  name: po_account_present
+
+customer IS NOT NULL:
+  action: drop
+  name: account_customer_join_matched
+
+customer IS NOT NULL AND LENGTH(TRIM(customer)) > 0:
+  action: drop
+  name: customer_name_present

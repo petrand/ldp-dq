@@ -1,0 +1,18 @@
+# LHP data_quality expectations on v_invoice_joined.
+# Quarantine mode coerces every action to drop; named rules populate
+# _dlq_failed_rules on the inbox.
+invoice_id IS NOT NULL AND LENGTH(TRIM(invoice_id)) > 0:
+  action: drop
+  name: invoice_id_present
+
+account IS NOT NULL AND LENGTH(TRIM(account)) > 0:
+  action: drop
+  name: invoice_account_present
+
+customer IS NOT NULL:
+  action: drop
+  name: account_customer_join_matched
+
+customer IS NOT NULL AND LENGTH(TRIM(customer)) > 0:
+  action: drop
+  name: customer_name_present

@@ -1,0 +1,15 @@
+# Duplicate current account keys in the bronze SCD2 map fan out the left join.
+# Historical versions are intentionally excluded.
+# Generated only with: lhp generate --env dev --include-tests
+pipeline: silver_invoice_customer
+flowgroup: account_customer_uniqueness
+
+actions:
+  - name: account_customer_account_unique
+    type: test
+    test_type: uniqueness
+    source: "${catalog}.${bronze_schema}.account_customer"
+    columns: [account]
+    filter: "__END_AT IS NULL"
+    on_violation: fail
+    description: "Manual account_customer map must have unique account keys"

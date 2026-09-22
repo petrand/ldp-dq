@@ -1,0 +1,76 @@
+# Bronze invoice LEFT JOIN bronze account_customer (manual map).
+# Row-level rules live in expectations/invoice_join_quality.yaml
+# (LHP data_quality). Failures go to the DLQ; passing rows write silver.
+pipeline: silver_invoice_customer
+flowgroup: invoice_with_customer
+
+actions:
+  - name: load_invoice_bronze
+    type: load
+    readMode: stream
+    source:
+      type: delta
+      catalog: "${catalog}"
+      schema: "${bronze_schema}"
+      table: invoice
+      options:
+        readChangeFeed: "true"
+      where_clause:
+        - "_change_type IN ('insert', 'update_postimage')"
+        - "__END_AT IS NULL"
+    target: v_invoice
+    description: "Stream new current SCD2 invoice versions"
+    # Demo rows: pipelines/sample_data/invoice.csv
+
+  - name: load_account_customer_bronze
+    type: load
+    readMode: batch
+    source:
+      type: delta
+      catalog: "${catalog}"
+      schema: "${bronze_schema}"
+      table: account_customer
+      where_clause:
+        - "__END_AT IS NULL"
+    target: v_account_customer
+    description: "Batch lookup of current account-customer versions"
+
+  - name: join_invoice_account_customer
+    type: transform
+    transform_type: sql
+    source:
+      - v_invoice
+      - v_account_customer
+    target: v_invoice_joined
+    description: "Left join invoice to account_customer on account"
+    sql: |
+      SELECT
+        i.invoice_id,
+        i.account,
+        ac.customer
+      FROM stream(v_invoice) i
+      LEFT JOIN v_account_customer ac
+        ON i.account = ac.account
+
+  - name: quarantine_failed_joins
+    type: transform
+    transform_type: data_quality
+    source: v_invoice_joined
+    target: v_invoice_validated
+    readMode: stream
+    mode: quarantine
+    expectations_file: expectations/invoice_join_quality.yaml
+    quarantine:
+      # Shared inbox with invoice; _dlq_source_table = this silver table
+      dlq_table: "${catalog}.${dq_schema}.invoice_join_dlq"
+      source_table: "${catalog}.${silver_schema}.invoice_with_customer"
+    description: "Quarantine rows where any validation failed"
+
+  - name: write_invoice_with_customer
+    type: write
+    source: v_invoice_validated
+    write_target:
+      type: streaming_table
+      catalog: "${catalog}"
+      schema: "${silver_schema}"
+      table: invoice_with_customer

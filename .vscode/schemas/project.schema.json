@@ -1,0 +1,346 @@
+{
+    "$schema": "http://json-schema.org/draft-07/schema#",
+    "title": "LakehousePlumber Project Configuration",
+    "description": "Schema for LakehousePlumber project configuration (lhp.yaml)",
+    "type": "object",
+    "required": ["name"],
+    "properties": {
+        "name": {
+            "type": "string",
+            "description": "Name of the project"
+        },
+        "version": {
+            "type": "string",
+            "default": "1.0",
+            "description": "Quote it in YAML — 1.0 unquoted parses as a number."
+        },
+        "description": {
+            "type": "string",
+            "description": "Description of the project"
+        },
+        "author": {
+            "type": "string",
+            "description": "Author of the project"
+        },
+        "created_date": {
+            "type": "string",
+            "description": "Creation date of the project"
+        },
+        "include": {
+            "type": "array",
+            "description": "Flowgroup YAML files to include, relative to pipelines/.",
+            "items": {
+                "type": "string",
+                "description": "Glob pattern for files to include (e.g., 'bronze_*.yaml', 'silver/**/*.yaml')"
+            },
+            "examples": [
+                ["bronze_*.yaml", "silver_*.yaml"],
+                ["pipelines/*/bronze/*.yaml", "ingestion/**/*.yaml"],
+                ["*.yaml"]
+            ]
+        },
+        "blueprint_include": {
+            "type": "array",
+            "description": "Blueprint definition files to include.",
+            "items": {
+                "type": "string",
+                "description": "Glob pattern for blueprint files to include"
+            },
+            "examples": [
+                ["blueprints/**/*.yaml"],
+                ["blueprints/erp/*.yaml", "blueprints/cdc/*.yaml"]
+            ]
+        },
+        "instance_include": {
+            "type": "array",
+            "description": "Blueprint instance files to include (default ['pipelines/**/*.yaml']); routed by content shape, so overlapping with include is safe.",
+            "items": {
+                "type": "string",
+                "description": "Glob pattern for instance files to include"
+            },
+            "examples": [
+                ["pipelines/**/*.yaml"],
+                ["pipelines/halo/**/*.yaml", "pipelines/sap/**/*.yaml"]
+            ]
+        },
+        "required_lhp_version": {
+            "type": "string",
+            "description": "PEP 440 specifier the CLI enforces before generating (e.g. >=0.9,<1.0).",
+            "examples": [
+                ">=0.4.1,<0.5.0",
+                "~=0.4.1",
+                "==0.4.1"
+            ]
+        },
+        "operational_metadata": {
+            "type": "object",
+            "description": "Project-level operational metadata configuration",
+            "properties": {
+                "columns": {
+                    "type": "object",
+                    "description": "Column definitions for operational metadata",
+                    "additionalProperties": {
+                        "oneOf": [
+                            {
+                                "type": "string",
+                                "description": "Shorthand: a bare string is the Spark SQL expression for the column"
+                            },
+                            {
+                                "type": "object",
+                                "properties": {
+                                    "expression": {
+                                        "type": "string",
+                                        "description": "Spark SQL expression for the column"
+                                    },
+                                    "description": {
+                                        "type": "string",
+                                        "description": "Description of the column"
+                                    },
+                                    "applies_to": {
+                                        "type": "array",
+                                        "items": {
+                                            "type": "string",
+                                            "enum": ["streaming_table", "materialized_view","view"]
+                                        },
+                                        "default": ["streaming_table", "materialized_view"],
+                                        "description": "Target types the column is added to (default: streaming_table, materialized_view)."
+                                    },
+                                    "additional_imports": {
+                                        "type": "array",
+                                        "items": {
+                                            "type": "string"
+                                        },
+                                        "description": "Import lines the expression needs in the generated file."
+                                    },
+                                    "enabled": {
+                                        "type": "boolean",
+                                        "default": true,
+                                        "description": "Whether this column is enabled"
+                                    }
+                                }
+                            }
+                        ]
+                    }
+                },
+                "presets": {
+                    "type": "object",
+                    "description": "Preset definitions for operational metadata",
+                    "additionalProperties": {
+                        "oneOf": [
+                            {
+                                "type": "array",
+                                "items": {
+                                    "type": "string"
+                                },
+                                "description": "Shorthand: a bare list is the list of column names in this preset"
+                            },
+                            {
+                                "type": "object",
+                                "properties": {
+                                    "columns": {
+                                        "type": "array",
+                                        "items": {
+                                            "type": "string"
+                                        },
+                                        "description": "Column names this preset selects — each must be defined above."
+                                    },
+                                    "description": {
+                                        "type": "string",
+                                        "description": "Description of the preset"
+                                    }
+                                },
+                                "required": ["columns"]
+                            }
+                        ]
+                    }
+                },
+                "defaults": {
+                    "type": "object",
+                    "description": "Default metadata selection applied when a flowgroup does not choose.",
+                    "additionalProperties": true
+                }
+            }
+        },
+        "event_log": {
+            "type": "object",
+            "description": "Project-level event log configuration for pipeline resources",
+            "properties": {
+                "enabled": {
+                    "type": "boolean",
+                    "default": true,
+                    "description": "Whether project-level event logging is enabled"
+                },
+                "catalog": {
+                    "type": "string",
+                    "description": "Catalog for event log tables (supports LHP substitution tokens); required while event_log is enabled."
+                },
+                "schema": {
+                    "type": "string",
+                    "description": "Schema for event log tables (supports LHP substitution tokens); required while event_log is enabled."
+                },
+                "name_prefix": {
+                    "type": "string",
+                    "default": "",
+                    "description": "Prefix prepended to pipeline name for event log table name"
+                },
+                "name_suffix": {
+                    "type": "string",
+                    "default": "",
+                    "description": "Suffix appended to pipeline name for event log table name"
+                }
+            }
+        },
+        "monitoring": {
+            "type": "object",
+            "description": "Event log monitoring pipeline configuration. Generates a notebook with N independent streaming queries plus a SDP pipeline with materialized views. A Databricks Workflow job chains the two.",
+            "properties": {
+                "enabled": {
+                    "type": "boolean",
+                    "default": true,
+                    "description": "Whether the monitoring pipeline is enabled"
+                },
+                "pipeline_name": {
+                    "type": "string",
+                    "description": "Name of the monitoring pipeline (default: ${project_name}_event_log_monitoring)"
+                },
+                "catalog": {
+                    "type": "string",
+                    "description": "Catalog for monitoring tables (default: event_log.catalog)"
+                },
+                "schema": {
+                    "type": "string",
+                    "description": "Schema for monitoring tables (default: event_log.schema)"
+                },
+                "streaming_table": {
+                    "type": "string",
+                    "default": "all_pipelines_event_log",
+                    "description": "Name of the user-created Delta table that event log streams write into"
+                },
+                "checkpoint_path": {
+                    "type": "string",
+                    "description": "Base path for streaming checkpoints ({checkpoint_path}/{pipeline_name}/ per pipeline). Required while monitoring is enabled."
+                },
+                "job_config_path": {
+                    "type": "string",
+                    "description": "Relative path to the dedicated monitoring job config YAML; required while monitoring is enabled."
+                },
+                "max_concurrent_streams": {
+                    "type": "integer",
+                    "default": 10,
+                    "minimum": 1,
+                    "maximum": 20,
+                    "description": "Maximum number of concurrent streaming queries in the union notebook (ThreadPoolExecutor max_workers)"
+                },
+                "materialized_views": {
+                    "type": "array",
+                    "description": "List of materialized views to create from the unified event log Delta table",
+                    "items": {
+                        "type": "object",
+                        "required": ["name"],
+                        "properties": {
+                            "name": {
+                                "type": "string",
+                                "description": "Name of the materialized view"
+                            },
+                            "sql": {
+                                "type": "string",
+                                "description": "Inline SQL body — leave empty when using a SQL file path."
+                            },
+                            "sql_path": {
+                                "type": "string",
+                                "description": "Project-relative .sql file — mutually exclusive with inline SQL."
+                            }
+                        }
+                    }
+                },
+                "enable_job_monitoring": {
+                    "type": "boolean",
+                    "default": false,
+                    "description": "Also monitor orchestration job runs, not just pipelines — via Databricks SDK, adds a jobs_stats materialized view."
+                }
+            }
+        },
+        "uc_tagging": {
+            "type": "object",
+            "description": "Unity Catalog tagging configuration. On by default — this block is optional and only needed to disable the feature or tune it. Users opt in by declaring 'tags' on a table/column; the generated per-pipeline _uc_tagging_hook.py then applies them via the Entity Tag Assignments REST API on pipeline update progress events.",
+            "properties": {
+                "enabled": {
+                    "type": "boolean",
+                    "default": true,
+                    "description": "Whether UC tagging is enabled. Defaults to true (on by default, even with no uc_tagging block). Set false to disable the feature entirely."
+                },
+                "remove_undeclared_tags": {
+                    "type": "boolean",
+                    "default": false,
+                    "description": "Also delete tags that exist in UC but not in the YAML (can remove tags set by other tools)."
+                },
+                "tag_update_concurrency": {
+                    "type": "integer",
+                    "default": 16,
+                    "minimum": 1,
+                    "maximum": 20,
+                    "description": "Maximum concurrent tag operations (the hook's ThreadPoolExecutor max_workers for the one-shot pass over all tables/columns)."
+                }
+            }
+        },
+        "test_reporting": {
+            "type": "object",
+            "description": "Test-result reporting configuration. Points at a user-supplied Python callable that publishes test results.",
+            "required": ["module_path", "function_name"],
+            "properties": {
+                "module_path": {
+                    "type": "string",
+                    "description": "Python module containing the report hook (required)."
+                },
+                "function_name": {
+                    "type": "string",
+                    "description": "Hook function inside the module (required)."
+                },
+                "config_file": {
+                    "type": "string",
+                    "description": "Optional YAML passed to the hook."
+                }
+            }
+        },
+        "wheel": {
+            "type": "object",
+            "description": "Per-project wheel packaging configuration (used by pipelines with packaging: wheel)",
+            "properties": {
+                "artifact_volume": {
+                    "type": "string",
+                    "description": "Unity Catalog volume path the built wheel is uploaded to; supports substitution tokens, and the /Volumes/... shape is validated post-substitution."
+                }
+            }
+        },
+        "sandbox": {
+            "type": "object",
+            "description": "Team-level developer-sandbox policy for lhp generate --sandbox",
+            "properties": {
+                "strategy": {
+                    "type": "string",
+                    "enum": ["table"],
+                    "default": "table",
+                    "description": "How sandbox output is isolated — only table renaming exists today."
+                },
+                "table_pattern": {
+                    "type": "string",
+                    "default": "{namespace}_{table}",
+                    "description": "Must contain {namespace} and {table}; literal text limited to letters, digits, and underscores."
+                },
+                "allowed_envs": {
+                    "type": "array",
+                    "description": "Environments where sandbox mode may run. Omit to allow every environment; an empty list is rejected.",
+                    "items": {
+                        "type": "string",
+                        "description": "Environment name (e.g. dev)"
+                    }
+                }
+            }
+        },
+        "apply_formatting": {
+            "type": "boolean",
+            "default": true,
+            "description": "Run the code-formatting pass over generated Python files. The AST-parse validity guard (LHP-CFG-031) always runs; --no-format overrides this."
+        }
+    }
+} 

@@ -1,0 +1,36 @@
+# Apply raw invoice changes into an SCD Type 2 bronze table.
+pipeline: bronze_scd2
+flowgroup: invoice_scd2
+
+actions:
+  - name: load_invoice_changes
+    type: load
+    readMode: stream
+    source:
+      type: delta
+      catalog: "${catalog}"
+      schema: "${raw_schema}"
+      table: invoice_changes
+    target: v_invoice_changes
+    description: "Stream raw invoice changes"
+
+  - name: write_invoice_bronze_scd2
+    type: write
+    source: v_invoice_changes
+    write_target:
+      type: streaming_table
+      mode: cdc
+      catalog: "${catalog}"
+      schema: "${bronze_schema}"
+      table: invoice
+      table_properties:
+        delta.enableChangeDataFeed: "true"
+      cdc_config:
+        keys: [invoice_id]
+        sequence_by: sequence_num
+        scd_type: 2
+        apply_as_deletes: "operation = 'DELETE'"
+        except_column_list: [operation]
+        # Tracking sequence_num guarantees an explicit touch/reprocess event
+        # creates a new SCD2 version even when business columns are unchanged.
+        track_history_column_list: [account, sequence_num]

@@ -1,0 +1,34 @@
+# Apply raw purchase-order changes into an SCD Type 2 bronze table.
+pipeline: bronze_scd2
+flowgroup: purchase_order_scd2
+
+actions:
+  - name: load_purchase_order_changes
+    type: load
+    readMode: stream
+    source:
+      type: delta
+      catalog: "${catalog}"
+      schema: "${raw_schema}"
+      table: purchase_order_changes
+    target: v_purchase_order_changes
+    description: "Stream raw purchase-order changes"
+
+  - name: write_purchase_order_bronze_scd2
+    type: write
+    source: v_purchase_order_changes
+    write_target:
+      type: streaming_table
+      mode: cdc
+      catalog: "${catalog}"
+      schema: "${bronze_schema}"
+      table: purchase_order
+      table_properties:
+        delta.enableChangeDataFeed: "true"
+      cdc_config:
+        keys: [po_id]
+        sequence_by: sequence_num
+        scd_type: 2
+        apply_as_deletes: "operation = 'DELETE'"
+        except_column_list: [operation]
+        track_history_column_list: [account, sequence_num]

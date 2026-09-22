@@ -1,0 +1,9 @@
+# LHP data_quality expectations on bronze account_customer.
+# Failures MERGE into the shared DLQ inbox (same table as invoice join).
+account IS NOT NULL AND LENGTH(TRIM(account)) > 0:
+  action: drop
+  name: map_account_present
+
+customer IS NOT NULL AND LENGTH(TRIM(customer)) > 0:
+  action: drop
+  name: map_customer_present

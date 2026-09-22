@@ -1,0 +1,37 @@
+# Required when databricks.yml is present. Quarantine recycle needs triggered
+# (non-continuous) pipelines.
+project_defaults:
+  catalog: "${catalog}"
+  schema: "${silver_schema}"
+  serverless: true
+  continuous: false
+  edition: ADVANCED
+  channel: CURRENT
+
+---
+pipeline: bronze_scd2
+catalog: "${catalog}"
+schema: "${bronze_schema}"
+serverless: true
+continuous: false
+
+---
+pipeline: silver_invoice_customer
+catalog: "${catalog}"
+schema: "${silver_schema}"
+serverless: true
+continuous: false
+
+---
+pipeline: silver_purchase_order
+catalog: "${catalog}"
+schema: "${silver_schema}"
+serverless: true
+continuous: false
+
+---
+pipeline: account_customer_dq
+catalog: "${catalog}"
+schema: "${silver_schema}"
+serverless: true
+continuous: false

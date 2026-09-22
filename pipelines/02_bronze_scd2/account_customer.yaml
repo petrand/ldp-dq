@@ -1,0 +1,34 @@
+# Apply raw account-customer changes into an SCD Type 2 bronze table.
+pipeline: bronze_scd2
+flowgroup: account_customer_scd2
+
+actions:
+  - name: load_account_customer_changes
+    type: load
+    readMode: stream
+    source:
+      type: delta
+      catalog: "${catalog}"
+      schema: "${raw_schema}"
+      table: account_customer_changes
+    target: v_account_customer_changes
+    description: "Stream raw account-customer changes"
+
+  - name: write_account_customer_bronze_scd2
+    type: write
+    source: v_account_customer_changes
+    write_target:
+      type: streaming_table
+      mode: cdc
+      catalog: "${catalog}"
+      schema: "${bronze_schema}"
+      table: account_customer
+      table_properties:
+        delta.enableChangeDataFeed: "true"
+      cdc_config:
+        keys: [account]
+        sequence_by: sequence_num
+        scd_type: 2
+        apply_as_deletes: "operation = 'DELETE'"
+        except_column_list: [operation]
+        track_history_column_list: [customer, sequence_num]
